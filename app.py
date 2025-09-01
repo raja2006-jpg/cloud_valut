@@ -14,6 +14,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 # File upload settings
 UPLOAD_FOLDER = os.path.join(basedir, 'static', 'uploads')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024 * 1024  # 10 GB max upload size
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Initialize database
@@ -85,17 +86,28 @@ def upload():
         flash("Please login to upload.")
         return redirect(url_for('index'))
 
-    file = request.files['file']
-    if file:
-        filename = secure_filename(file.filename)
-        user_folder = os.path.join(app.config['UPLOAD_FOLDER'], str(session['user_id']))
-        os.makedirs(user_folder, exist_ok=True)
-        file.save(os.path.join(user_folder, filename))
+    if 'file' not in request.files:
+        flash("No file part.")
+        return redirect(url_for('index'))
 
+    file = request.files['file']
+    if file.filename == '':
+        flash("No selected file.")
+        return redirect(url_for('index'))
+
+    filename = secure_filename(file.filename)
+    user_folder = os.path.join(app.config['UPLOAD_FOLDER'], str(session['user_id']))
+    os.makedirs(user_folder, exist_ok=True)
+    file_path = os.path.join(user_folder, filename)
+
+    try:
+        file.save(file_path)
         new_file = File(filename=filename, user_id=session['user_id'])
         db.session.add(new_file)
         db.session.commit()
         flash("File uploaded successfully.")
+    except Exception as e:
+        flash(f"Upload failed: {e}")
 
     return redirect(url_for('index'))
 
